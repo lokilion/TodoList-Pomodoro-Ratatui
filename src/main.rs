@@ -1,7 +1,8 @@
-mod app;
-mod handle_events;
-mod events;
-
+pub mod app;
+pub mod events;
+pub mod handle_events;
+pub mod models;
+pub mod pomodoro;
 use std::{error::Error};
 use crate::app::App;
 

@@ -1,9 +1,19 @@
-use std::{error::Error, fmt::{self, Display}, fs, thread::current, time::{Duration, Instant}};
-use clap::ArgAction::Count;
-use ratatui::{DefaultTerminal, Frame, buffer::Buffer, layout::{Constraint::{self, Length, Percentage}, Direction, Layout, Rect}, style::{Modifier, Style, Stylize, palette::tailwind::SLATE}, text::{Line, ToSpan}, widgets::{Block, Cell, List, ListItem, ListState, Paragraph, Row, StatefulWidget, Table, TableState, Widget}};
-use serde::{Deserialize, Serialize};
+use std::{error::Error, time::Duration};
+use ratatui::{
+    DefaultTerminal,
+    Frame, buffer::Buffer, 
+    layout::{Constraint::{self, Length}, Direction, Layout, Rect}, 
+    style::{Modifier, Style, Stylize, palette::tailwind::SLATE}, 
+    text::{Line, ToSpan}, 
+    widgets::{Block, Cell, Paragraph, Row, StatefulWidget, Table, TableState, Widget}
+};
 
-use crate::{events::EventHandler, handle_events::handle_events};
+use crate::{
+    events::EventHandler, 
+    handle_events::handle_events,
+    models::{Status, Todolist},
+    pomodoro::PomoSession,
+};
 
 const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
 
@@ -64,6 +74,9 @@ impl App {
     pub fn selecting_item(&self)->Option<usize>{
         self.todolist.state.selected()
     }
+    pub fn is_pomo_session_running(&self) -> bool{
+        self.pommo_session.is_runing()
+    }
     //select item
     pub fn select_none(&mut self){
         self.todolist.state.select(None);
@@ -83,6 +96,14 @@ impl App {
     //start pomodoro
     pub fn start_pomodoro(&mut self){
         self.pommo_session.start();
+    }
+    //pause pomodoro
+    pub fn pause_pomodoro(&mut self){
+        self.pommo_session.pause();
+    }
+    //reset pomodoro
+    pub fn reset_pomodoro(&mut self){
+        self.pommo_session.reset();
     }
     //Input mod
     pub fn start_editing(&mut self, input_mod: Inputmod) {
@@ -176,7 +197,7 @@ impl App {
                     Status::Pending => "[ ]"
                 };
                 let left_cell = Cell::from(format!("{} {}",marker, item.name));
-                let right_text = if let Some(pomos) = item.pomo_remain{
+                let right_text = if let Some(pomos) = item.pomo_total{
                     format!("{}/{}", item.pomo_done, pomos)
                 }else{
                     String::from("")
@@ -247,220 +268,5 @@ impl App {
         Paragraph::new(text)
             .centered()
             .render(area, buf);
-    }
-}
-
-struct Todolist{
-    items: Vec<Todo>,
-    //state: ListState
-    state: TableState
-}
-
-impl Todolist {
-    fn new() -> Todolist {
-        Todolist{
-            items: Todolist::init_todo_list(),
-            //state: ListState::default()
-            state: TableState::new()
-        }
-    }
-    //return next todo which is pending and has been set a pomodoro
-    fn next_pomo_todo(&self) -> Option<usize>{
-        self.items.iter().position(|item|{
-            item.pomo_remain > Some(0) && item.state == Status::Pending
-        })
-    }
-    //modify todolist
-    fn add_todo(&mut self, name: &str){
-        self.items.push(Todo::new(name));
-    }
-    //save todolist to local file
-    fn init_todo_list() -> Vec<Todo>{
-        match fs::read_to_string(".TodoList") {
-            Ok(txt) => {
-                let todo_list:Vec<Todo> = serde_json::from_str(&txt).unwrap_or_default();
-                todo_list
-            }
-            _ => Vec::new()
-        }
-    }
-    fn save_to_file(&self)->Result<(), Box<dyn Error>>{
-        let txt = serde_json::to_string_pretty(&self.items)?;
-        fs::write(".TodoList", txt)?;
-        Ok(println!("Todo list has been saved"))
-    }
-}
-
-struct PomoSession{
-    cnt: usize,
-    cycle: usize,
-    work_flow: Vec<Countdown>,
-    run_session: bool,
-}
-impl PomoSession {
-    fn new(cycle: usize) -> PomoSession{
-        PomoSession {
-            cnt: 0,
-            cycle: cycle,
-            work_flow: {
-                let mut flow = Vec::new();
-                for _ in 1..cycle{
-                    //work count
-                    flow.push(Countdown::new(Duration::from_mins(25)));
-                    //short break count
-                    flow.push(Countdown::new(Duration::from_mins(5)));
-                }
-                //the last pomo
-                flow.push(Countdown::new(Duration::from_mins(25)));
-                //long break count
-                flow.push(Countdown::new(Duration::from_mins(30)));
-                flow
-            },
-            run_session: false
-        }
-    }
-
-    fn start(&mut self){
-        self.run_session = true;
-        self.work_flow[self.cnt].start();
-    }
-
-    fn tick(&mut self){
-        //if pause the session, end fn
-        if !self.run_session{return;}
-
-        self.cnt = self.cnt%self.cycle;
-        if self.work_flow[self.cnt].remaining.is_zero(){
-            //reset the count down
-            self.work_flow[self.cnt].reset();
-            //move to next count down
-            self.cnt += (self.cnt+1)%self.cycle;
-            self.work_flow[self.cnt].start();
-            
-        }
-        self.work_flow[self.cnt].tick()
-    }
-    fn time_format(&self) -> String{
-        self.work_flow[self.cnt].time_format()
-    }
-    fn is_runing(&self) -> bool{
-        self.run_session
-    }
-}
-struct Countdown{
-    total_duration: Duration,
-    remaining: Duration,
-    last_tick: Instant,
-    running: bool,
-    current_todo: Option<usize>,
-}
-impl Countdown {
-    fn new(total_duration: Duration) -> Countdown{
-        Countdown {
-            total_duration: total_duration,
-            remaining: total_duration,
-            last_tick: Instant::now(),
-            running: false,
-            current_todo: None,
-        }
-    }
-    fn tick(&mut self){
-        //if is not running end fn
-        if !self.running{ return; }
-
-        //current-time - last-time = passed time
-        let now = Instant::now();
-        let dt = now-self.last_tick;
-        self.last_tick = Instant::now();
-
-        // if no time remain to count, end fn
-        if self.remaining.is_zero(){
-            self.running = false;
-            return;
-        }
-        self.remaining = self.remaining.saturating_sub(dt);
-    }
-    fn end(&mut self) {
-        self.running = false;
-    }
-    fn start(&mut self){
-        self.running = true;
-        //set start time
-        self.last_tick = Instant::now();
-    }
-    fn reset(&mut self){
-        self.running = false;
-        self.remaining = self.total_duration;
-    }
-    fn time_format(&self) -> String{
-        let sec = self.remaining.as_secs();
-        let min = sec / 60;
-        let sec = sec % 60;
-
-        format!("{:02}:{:02}",min, sec)
-    }
-}
-
-#[derive(Serialize, Deserialize, PartialEq)]
-enum Status{
-    Done,
-    Pending
-}
-
-#[derive(Serialize, Deserialize)]
-struct Todo{
-    name: String,
-    state: Status,
-    pomo_remain: Option<u8>,
-    pomo_done: u8,
-}
-
-impl Todo{
-    fn new(name: &str)->Todo{
-        Todo {
-            name: name.to_string(), 
-            state: Status::Pending,
-            pomo_remain: None,
-            pomo_done: 0
-        }
-    }
-    fn rename(&mut self, new_name: String){
-        self.name = new_name;
-    }
-    fn set_pomo(&mut self, num: Option<u8>){
-        if let Some(n) = num{
-            self.pomo_remain = if n==0{None}else{num};
-        }
-    }
-    fn toggle_state(&mut self){
-        self.state = match self.state{
-            Status::Done => Status::Pending,
-            Status::Pending => Status::Done,
-        }
-    }
-}
-
-impl Display for Todo{
-    fn fmt(&self, f:&mut fmt::Formatter) -> fmt::Result{
-        let marker = match self.state{
-            Status::Done => "[√]",
-            Status::Pending => "[ ]"
-        };
-        write!(f, "{} {}", marker, self.name)
-    }
-}
-impl From<&Todo> for ListItem<'_>{
-    fn from(value: &Todo) -> Self {
-        let marker = match value.state{
-            Status::Done => "[√]",
-            Status::Pending => "[ ]"
-        };
-        let display_pomo = if let Some(i) = value.pomo_remain{
-            format!("| {}", i)
-        }else{
-            String::from("")
-        };
-        let line = Line::raw(format!("{} {} {}", marker, value.name, display_pomo));
-        ListItem::new(line)
     }
 }

@@ -33,7 +33,15 @@ fn handle_key_events(app: &mut App, key_event: KeyEvent){
                 KeyCode::Char('+') => app.start_editing(Inputmod::AddTodo),
                 //start pomodoro
                 KeyCode::Char(' ') => {
-                   app.start_pomodoro();
+                    if app.is_pomo_session_running(){
+                        app.pause_pomodoro();
+                    }else{
+                        app.start_pomodoro();
+                    }
+                }
+                //reset pomodoro
+                KeyCode::Char('R') => {
+                    app.reset_pomodoro();
                 }
                 //exit the app
                 KeyCode::Esc => app.exit_app(),
