@@ -5,7 +5,6 @@ pub struct Countdown{
     remaining: Duration,
     last_tick: Instant,
     running: bool,
-    current_todo: Option<usize>,
 }
 impl Countdown {
     pub fn new(total_duration: Duration) -> Countdown{
@@ -14,7 +13,6 @@ impl Countdown {
             remaining: total_duration,
             last_tick: Instant::now(),
             running: false,
-            current_todo: None,
         }
     }
     pub fn tick(&mut self){
@@ -24,7 +22,7 @@ impl Countdown {
         //current-time - last-time = passed time
         let now = Instant::now();
         let dt = now-self.last_tick;
-        self.last_tick = Instant::now();
+        self.last_tick = now;
 
         // if no time remain to count, end fn
         if self.remaining.is_zero(){
@@ -50,7 +48,8 @@ impl Countdown {
         let min = sec / 60;
         let sec = sec % 60;
 
-        format!("{:02}:{:02}",min, sec)
+        let marker = if self.running {"▶"} else {"#"};
+        format!("{}{:02}:{:02}",marker,min, sec)
     }
     pub fn check_is_over(&self) -> bool{
         self.remaining.is_zero()

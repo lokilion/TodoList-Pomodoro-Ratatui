@@ -18,10 +18,18 @@ impl Todolist {
         }
     }
     //return next todo which is pending and has been set a pomodoro
-    pub fn next_pomo_todo(&self) -> Option<usize>{
+    fn next_pomo_todo(&self) -> Option<usize>{
         self.items.iter().position(|item|{
             item.pomo_total > Some(0) && item.state == Status::Pending
         })
+    }
+    pub fn update_pomo(&mut self){
+        if let Some(i) = self.next_pomo_todo(){
+            self.items[i].pomo_done += 1;
+            if self.items[i].pomo_done >= self.items[i].pomo_total.unwrap(){
+                self.items[i].toggle_state();
+            }
+        }
     }
     //modify todolist
     pub fn add_todo(&mut self, name: &str){

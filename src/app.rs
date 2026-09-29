@@ -1,18 +1,13 @@
 use std::{error::Error, time::Duration};
 use ratatui::{
-    DefaultTerminal,
-    Frame, buffer::Buffer, 
-    layout::{Constraint::{self, Length}, Direction, Layout, Rect}, 
-    style::{Modifier, Style, Stylize, palette::tailwind::SLATE}, 
-    text::{Line, ToSpan}, 
-    widgets::{Block, Cell, Paragraph, Row, StatefulWidget, Table, TableState, Widget}
+    DefaultTerminal, Frame, buffer::Buffer, layout::{Constraint::{self, Length}, Direction::{self, Horizontal, Vertical}, Layout, Rect}, style::{Modifier, Style, Stylize, palette::tailwind::SLATE}, text::{Line, ToSpan}, widgets::{Block, Cell, Paragraph, Row, StatefulWidget, Table, Widget}
 };
 
 use crate::{
     events::EventHandler, 
     handle_events::handle_events,
     models::{Status, Todolist},
-    pomodoro::PomoSession,
+    pomodoro::{PomoSession, TickOutcome},
 };
 
 const SELECTED_STYLE: Style = Style::new().bg(SLATE.c800).add_modifier(Modifier::BOLD);
@@ -146,7 +141,12 @@ impl App {
 
     //when tick-event happens
     pub fn tick_event(&mut self){
-        self.pommo_session.tick();
+        match self.pommo_session.tick(){
+            TickOutcome::WorkFinished => {
+                self.todolist.update_pomo();
+            },
+            _ => {}
+        };
         self.header_time = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     }
 }
@@ -238,6 +238,7 @@ impl App {
             .title(" Timer ".to_span().into_centered_line());
         timer_block.render(r_timer, buf);
         let [_, middle,_] = Layout::default()
+            .direction(Vertical)
             .constraints(vec![
                 Constraint::Fill(1),
                 Constraint::Length(3),
@@ -247,13 +248,7 @@ impl App {
         let text = vec![
             Line::from(self.pommo_session.time_format()),
             Line::from(""),
-            Line::from(
-                if self.pommo_session.is_runing(){
-                    "▶RUNNING"
-                }else{
-                    "#PAUSE"
-                }
-            )
+            Line::from(self.pommo_session.indecator())
         ];
         Paragraph::new(text)
             .centered()
