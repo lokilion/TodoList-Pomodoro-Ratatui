@@ -39,6 +39,12 @@ fn handle_key_events(app: &mut App, key_event: KeyEvent){
                         app.start_pomodoro();
                     }
                 }
+                //rename a todo
+                KeyCode::Char('r') => {
+                    if let Some(_) = app.selecting_item(){
+                        app.start_editing(Inputmod::RenameTodo);
+                    }
+                }
                 //reset pomodoro
                 KeyCode::Char('R') => {
                     app.reset_pomodoro();
@@ -66,6 +72,15 @@ fn handle_key_events(app: &mut App, key_event: KeyEvent){
         Inputmod::AddTodo => {
             match key_event.code{
                 KeyCode::Enter => app.add_item(),
+                KeyCode::Esc => app.exit_editing(),
+                KeyCode::Backspace => { app.input_buf.pop(); },
+                KeyCode::Char(c) => app.input_buf.push(c),
+                _ => (),
+            };
+        },
+        Inputmod::RenameTodo => {
+            match key_event.code{
+                KeyCode::Enter => app.rename_todo(),
                 KeyCode::Esc => app.exit_editing(),
                 KeyCode::Backspace => { app.input_buf.pop(); },
                 KeyCode::Char(c) => app.input_buf.push(c),

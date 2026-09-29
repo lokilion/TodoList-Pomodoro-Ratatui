@@ -1,9 +1,6 @@
 use std::{error::Error, sync::mpsc::{self}, thread, time::{Duration, Instant}};
 use crossterm::event::{self, Event, KeyEvent, KeyEventKind};
 
-use crate::events::AppEvent::Resize;
-
-
 pub enum AppEvent{
     Tick,
     Key(KeyEvent),

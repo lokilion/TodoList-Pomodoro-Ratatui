@@ -16,6 +16,7 @@ pub enum Inputmod{
     Normal,
     AddTodo,
     SetPomodoro,
+    RenameTodo,
 }
 
 pub struct App{
@@ -115,6 +116,13 @@ impl App {
 
         self.input_buf.clear();
         self.input_mod = Inputmod::Normal;
+    }
+    pub fn rename_todo(&mut self){
+        if let Some(i) = self.todolist.state.selected(){
+            self.todolist.items[i].rename(self.input_buf.clone());
+            self.input_buf.clear();
+            self.input_mod = Inputmod::Normal;
+        }
     }
     pub fn set_pomodoro(&mut self){
         let new_pomo = match self.input_buf.trim().parse::<u8>(){
@@ -257,7 +265,7 @@ impl App {
 
     fn render_footer(&self, area: Rect, buf: &mut Buffer){
         let text = match self.input_mod{
-            Inputmod::Normal => "Use ↓↑ to move, ← to unselect, → to change status | Space to add a todo.",
+            Inputmod::Normal => "↓↑ to move, ← to unselect, → to toggle, + to add, r to rename, R to reset .",
             _ => self.input_buf.as_str(),
         };
         Paragraph::new(text)
